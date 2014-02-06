@@ -24,7 +24,7 @@ class Peer:
 
 
     def __str__(self):
-        my_string = "ID: %s, IP: %s, Port: %d"% (self.my_id, self.server_host, self.server_port)
+        my_string = "{ID: %s, IP: %s, Port: %d}"% (self.my_id, self.server_host, self.server_port)
         return my_string
 
 
@@ -53,25 +53,14 @@ class Peer:
         s.listen( 5 )
         return s
 
-
-    """------------------------------------
-     NAME: __addRestoreDisplaye
-     DESCRIPTION: 
-     PARAMETERS: 
-    ------------------------------------"""
-    def addRestoreDisplay(self, restore_display_fn):
-        assert restore_display_fn != None
-        self.restore_display = restore_display_fn
-
-
     """------------------------------------
      NAME: __addRequestHandler
      DESCRIPTION: 
      PARAMETERS: 
     ------------------------------------"""
-    def addRequestHandler( self, msg_type, handler, arg_count=2, wait_reply=False ):
+    def addRequestHandler( self, msg_type, handler):
         assert len(msg_type) == 4
-        self.handlers[msg_type] = [handler, arg_count, wait_reply]
+        self.handlers[msg_type] = handler
 
 
     """------------------------------------
@@ -103,10 +92,9 @@ class Peer:
                     print 'Message can not be handled'
             else:
                 handler = self.handlers[msg_type]
-                handler[0]( peer_connection, 
-                                         msg_data)
+                handler( peer_connection, 
+                         msg_data)
             peer_connection.close()
-            #self.restore_display()
             
         except KeyboardInterrupt:
             raise
@@ -131,21 +119,6 @@ class Peer:
             if self.debug:
                 print "This is my peer list: ", self.peer_list
 
-
-
-    """------------------------------------
-     NAME: __findPeer
-     DESCRIPTION: 
-     PARAMETERS:
-    ------------------------------------"""
-    def __findPeer(self, peer_id):
-        for peer in self.peer_list:
-            if peer_id == peer[0]:
-                host = peer[1]
-                port = peer[2]
-                return(host, port)
-        
-        return(None,0)
         
 
     """------------------------------------
