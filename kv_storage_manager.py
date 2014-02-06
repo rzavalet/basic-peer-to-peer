@@ -497,7 +497,7 @@ class KVStorageManager(Peer):
                     print '  BYE: quit this peer'
                     print '  INSERT <key> <value>'
                     print '  DELETE <key>'
-                    print '  GET <key'
+                    print '  GET <key>'
                     print '  GET_ALL'
                     print '  DELETE_ALL'
                     print ''
