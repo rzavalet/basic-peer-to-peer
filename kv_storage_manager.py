@@ -9,11 +9,14 @@ These are the names of the supported messages
 GET_PEER_NAME = "NAME"
 GET_PEER_LIST = "LIST"
 ADD_PEER = "ADDP"
-SEND_ERROR = "ERRO"
+
 GET_DATA = "GETD"
 PUT_DATA = "PUTD"
-DELETE_DATA = "DELD"
+DEL_DATA = "DELD"
+DEL_ALL_DATA = "DELA"
+GET_ALL_DATA = "GETA"
 REPLY = "REPL"
+SEND_ERROR = "ERRO"
 
 class KVStorageManager(Peer):
 
@@ -21,16 +24,19 @@ class KVStorageManager(Peer):
         print 'Initializing KVStorageManager'
         Peer.__init__(self, my_id, server_port, ip_tracker, port_tracker)
 
-        self.addRestoreDisplay( self.__restoreDisplay )
-        self.addRequestHandler(GET_PEER_NAME, self.__getPeerName, 2, True)
-        self.addRequestHandler(REPLY, self.__reply, 1, False)
-        self.addRequestHandler(GET_PEER_LIST, self.__getPeerList, 2, True)
-        self.addRequestHandler(ADD_PEER, self.__addPeer, 2, True)
-        #self.addRequestHandler(SEND_ERROR, self.__sendError, 0)
-        #self.addRequestHandler(GET_DATA, self.__getData, 0)
-        #self.addRequestHandler(PUT_DATA, self.__putData, 0)
-        #self.addRequestHandler(DELETE_DATA, self.__delData, 0)
+        self.addRequestHandler(GET_PEER_NAME, self.__getPeerName)
+        self.addRequestHandler(GET_PEER_LIST, self.__getPeerList)
+        self.addRequestHandler(ADD_PEER, self.__addPeer)
+
+        self.addRequestHandler(GET_DATA, self.__getData)
+        self.addRequestHandler(PUT_DATA, self.__putData)
+        self.addRequestHandler(DEL_DATA, self.__delData)
+        self.addRequestHandler(GET_ALL_DATA, self.__getAllData)
+        self.addRequestHandler(DEL_ALL_DATA, self.__delAllData)
+
         self.__buildPeersTable2(ip_tracker, port_tracker, 5)
+
+        self.kvstore = {}
 
     """------------------------------------
      NAME: __buildPeersTable2
@@ -103,15 +109,6 @@ class KVStorageManager(Peer):
 
 
     """------------------------------------
-     NAME: __reply
-     DESCRIPTION: replies the peer id
-     PARAMETERS:
-    ------------------------------------"""
-    def __reply( self, peer_connection, msg ):
-        if self.debug:
-            print 'Received {%s}'%(msg)
-
-    """------------------------------------
      NAME: __getPeerList
      DESCRIPTION: replies the peer id
      PARAMETERS:
@@ -124,6 +121,7 @@ class KVStorageManager(Peer):
             host,port = self.getPeer(pid)
             peer_connection.sendData(REPLY, '%s %s %d' % (pid, host, port))
 
+
     """------------------------------------
      NAME: __addPeer
      DESCRIPTION: 
@@ -134,7 +132,8 @@ class KVStorageManager(Peer):
             peer_id,host,port = data.split()
 
             if self.maxPeersReached():
-                print 'maxpeers %d reached: connection terminating' % (self.maxpeers)
+                if self.debug:
+                    print 'maxpeers %d reached: connection terminating' % (self.maxpeers)
                 peer_connection.sendData(SEND_ERROR, 'Join: too many peers')
                 return
 
@@ -154,14 +153,281 @@ class KVStorageManager(Peer):
             peer_connection.sendData(SEND_ERROR, 'Join: incorrect arguments')
 
 
+
+    """------------------------------------
+     NAME: __getData
+     DESCRIPTION: 
+     PARAMETERS:
+    ------------------------------------"""
+    def __getData( self, peer_connection, msg ):
+        try:
+            key = msg
+            if self.debug:
+                print 'Searching %s locally' % key
+            if key in self.kvstore:
+                if self.debug:
+                    print 'Found'
+                peer_connection.sendData(REPLY, self.kvstore[key])
+            else:
+                if self.debug:
+                    print 'Not found'
+                peer_connection.sendData(SEND_ERROR, 'Key not here')
+
+        except:
+            if self.debug:
+                print 'invalid request'
+            peer_connection.sendData(SEND_ERROR, 'Invalid request')
+
+    """------------------------------------
+     NAME: __getData
+     DESCRIPTION: 
+     PARAMETERS:
+    ------------------------------------"""
+    def __getAllData( self, peer_connection, msg ):
+        try:
+            num_elements = len(self.kvstore)
+            peer_connection.sendData(REPLY, '%d'%num_elements)
+
+            for key in self.kvstore:
+                peer_connection.sendData(REPLY, '%s %s' % (key, self.kvstore[key]))
+
+        except:
+            if self.debug:
+                print 'invalid request'
+            peer_connection.sendData(SEND_ERROR, 'Invalid request')
+
+    """------------------------------------
+     NAME: __putData
+     DESCRIPTION: 
+     PARAMETERS:
+    ------------------------------------"""
+    def __putData( self, peer_connection, msg ):
+        try:
+            key, value = msg.split()
+            if key in self.kvstore:
+                self.kvstore[key] = value
+                peer_connection.sendData(REPLY, self.kvstore[key])
+            else:
+                peer_connection.sendData(SEND_ERROR, 'Key not here')
+        except:
+            if self.debug:
+                print 'invalid request'
+            peer_connection.sendData(SEND_ERROR, 'Invalid request')
+
+
+    """------------------------------------
+     NAME: __delData
+     DESCRIPTION:
+     PARAMETERS:
+    ------------------------------------"""
+    def __delData( self, peer_connection, msg ):
+        try:
+            if key in self.kvstore:
+                del self.kvstore[key]
+                peer_connection.sendData(REPLY, self.kvstore[key])
+            else:
+                peer_connection.sendData(SEND_ERROR, 'Key not here')
+        except:
+            if self.debug:
+                print 'invalid request'
+            peer_connection.sendData(SEND_ERROR, 'Invalid request')
+
+    """------------------------------------
+     NAME: __delAllData
+     DESCRIPTION:
+     PARAMETERS:
+    ------------------------------------"""
+    def __delAllData( self, peer_connection, msg ):
+        try:
+            for key in self.kvstore:
+                del self.kvstore[key]
+        except:
+            if self.debug:
+                print 'invalid request'
+
+
+    """------------------------------------
+     NAME: __doInsertKey
+     DESCRIPTION:
+     PARAMETERS:
+    ------------------------------------"""
+    def __doInsertKey(self, key, value):
+        if self.debug:
+            print 'Inserting {%s: %s}'%(key,value)
+
+        if key in self.kvstore:
+            self.kvstore[key] = value
+            print 'Inserted {%s: %s}' % (key, value)
+            return
+
+        if self.debug:
+            print 'Not found locally... Searching remotely' 
+
+        found = False
+
+        for peer_id in self.getPeerIds():
+            resp = self.sendToPeer(peer_id,
+                                 PUT_DATA, 
+                                 '%s %s'%(key,value), 
+                                 True)[0]
+                
+            if resp is None or resp[0] != REPLY:
+                continue
+
+            print 'Inserted {%s: %s}' % (key, value)
+            found = True
+            break
+
+        if not found:
+            if self.debug:
+                print 'Not found remotely... Inserting locally'
+            self.kvstore[key] = value
+            print 'Inserted {%s: %s}' % (key, value)
+            return
+
+
+    """------------------------------------
+     NAME: __doDeleteKey
+     DESCRIPTION:
+     PARAMETERS:
+    ------------------------------------"""
+    def __doDeleteKey(self, key):
+        if self.debug:
+            print 'Deleting {%s}'%(key)
+
+        if key in self.kvstore:
+            del self.kvstore[key]
+            print 'Deleted %s' % key
+            return
+
+        if self.debug:
+            print 'Not found locally... Searching remotely' 
+
+        found = False
+
+        for peer_id in self.getPeerIds():
+            resp = self.sendToPeer(peer_id,
+                                 DEL_DATA, 
+                                 key, 
+                                 True)[0]
+                
+            if resp is None or resp[0] != REPLY:
+                continue
+
+            if resp[1] != '':
+                print 'Deleted %s' % key
+                found = True
+                break
+
+        if not found:
+            print 'Key not found'
+            return
+
+    """------------------------------------
+     NAME: __doDelAllValue
+     DESCRIPTION:
+     PARAMETERS:
+    ------------------------------------"""
+    def __doDelAllValue(self):
+        if self.debug:
+            print 'Deleting All'
+
+        for key in self.kvstore:
+            del self.kvstore[key]
+
+        for peer_id in self.getPeerIds():
+            if self.debug:
+                print 'Looking in %s' % peer_id
+
+            resp = self.sendToPeer(peer_id,
+                                 DEL_ALL_DATA, 
+                                 '', False)
+        print "Deleted all"
+
+
+    """------------------------------------
+     NAME: __doGetValue
+     DESCRIPTION:
+     PARAMETERS:
+    ------------------------------------"""
+    def __doGetValue(self, key):
+        if self.debug:
+            print 'Getting {%s}'%(key)
+
+        if key in self.kvstore:
+            print '{%s: %s}' % (key, self.kvstore[key])
+            return
+
+        if self.debug:
+            print 'Not found locally... Searching remotely' 
+
+        found = False
+
+        for peer_id in self.getPeerIds():
+            if self.debug:
+                print 'Looking in %s' % peer_id
+
+            resp = self.sendToPeer(peer_id,
+                                 GET_DATA, 
+                                 key, 
+                                 True)[0]
+                
+            if resp is None or resp[0] != REPLY:
+                continue
+
+            if resp[1] != '':
+                print '{%s: %s}' % (key, resp[1])
+                found = True
+                break
+
+        if not found:
+            print 'Key not found'
+            return
+
+
+    """------------------------------------
+     NAME: __doGetAllValue
+     DESCRIPTION:
+     PARAMETERS:
+    ------------------------------------"""
+    def __doGetAllValue(self):
+        if self.debug:
+            print 'Getting All'
+
+        have_keys = False
+
+        for key in self.kvstore:
+            print '{%s: %s}' % (key, self.kvstore[key])
+            have_keys = True
+
+        for peer_id in self.getPeerIds():
+            if self.debug:
+                print 'Looking in %s' % peer_id
+
+            resp = self.sendToPeer(peer_id,
+                                 GET_ALL_DATA, 
+                                 '', 
+                                 True)
+                
+	    if len(resp) > 1:
+		resp.reverse()
+		resp.pop()    # get rid of header count reply
+		while len(resp):
+		    key, value = resp.pop()[1].split()
+		    print '{%s: %s}' % (key, value)
+                    have_keys = True
+
+        if have_keys == False:
+            print "No keys"
+
     """------------------------------------
      NAME: __readCommandLine
      DESCRIPTION:
      PARAMETERS:
     ------------------------------------"""
     def __readCommandLine(self, verbose=False):
-        self.restore_display()
-        command = raw_input();
+        #print '\n\nType a command: '
+        command = raw_input('\n\nType a command >> ');
         tmp_arguments = command.split(" ")
         arguments = [_ for _ in tmp_arguments if _ != '']
         if verbose: print arguments
@@ -174,39 +440,6 @@ class KVStorageManager(Peer):
 
 
     """------------------------------------
-    NAME: __validateCommand
-    DESCRIPTION: determines if the command 
-                 provided is valid
-    PARAMETERS: 
-          command (IN) Command to validate
-    ------------------------------------"""            
-    def __validateCommand(self, command):
-        num_arguments = len(command)
-        assert num_arguments > 1
-        command_name = command[1].upper()
-
-        if command_name not in self.handlers:
-            print 'Command not implemented'
-            return (False, False)
-
-        handler = self.handlers[command_name]
-        if handler[1] == num_arguments:
-            return (True, handler[2])
-        else:
-            print 'Invalid number of arguments'
-            return (False, False)
-
-        
-    """------------------------------------
-     NAME: __restoreDisplay
-     DESCRIPTION: Manages the command line
-     PARAMETERS:
-    ------------------------------------"""
-    def __restoreDisplay( self ):
-        print '\n\nType a command: '
-
-
-    """------------------------------------
      NAME: __console
      DESCRIPTION: Manages the command line
      PARAMETERS:
@@ -216,54 +449,112 @@ class KVStorageManager(Peer):
         print 'Key-Value Store. By Ricardo Zavaleta'
         print 'Starting console...'
         print 'Type HELP for a list of valid commands/queries'
+
+        #Keep reading commands
         while not self.shutdown:
             try:
+                
+                #Read command
                 arguments = self.__readCommandLine()
                 if not arguments:
                     print "No argument provided"
                     continue
                         
+                num_args = len(arguments)
+                data = ''
+
+                #Find the command just received
                 if arguments[0].upper() == "BYE":
                     print 'Shutting down threads...'
                     self.shutdown = True
                     continue
                     
-                if arguments[0].upper() == "MY_LIST":
-                    print self.peer_list
+                elif arguments[0].upper() == "MY_PEERS":
+                    if len(self.peer_list) == 0:
+                        print "No peers"
+
+                    for peer_id in self.peer_list:
+                        print '{ID: %s, IP: %s, Port: %d}' % (peer_id, self.peer_list[peer_id][0], self.peer_list[peer_id][1] )
                     continue
 
-                if arguments[0].upper() == "MY_NAME":
-                    print 'I am %s: %s, %d' % (self.my_id, self.server_host, int(self.server_port))
+                elif arguments[0].upper() == "MY_NAME":
+                    print '{ID: %s,  IP: %s, Port: %d}' % (self.my_id, self.server_host, int(self.server_port))
                     continue
 
-                if arguments[0].upper() == 'HELP':
+                elif arguments[0].upper() == "MY_STORE":
+                    if len(self.kvstore) == 0:
+                        print "No keys"
+
+                    for key in self.kvstore:
+                        print '{%s: %s}' % (key, self.kvstore[key])
+                    continue
+
+                elif arguments[0].upper() == 'HELP':
                     print 'Valid commands are:'
-                    print '  MY_LIST: list my peers'
+                    print '  MY_PEERS: list my peers'
                     print '  MY_NAME: shows my id'
+                    print '  MY_STORE: shows my stored key-value pairs'
                     print '  BYE: quit this peer'
+                    print '  INSERT <key> <value>'
+                    print '  DELETE <key>'
+                    print '  GET <key'
+                    print '  GET_ALL'
+                    print '  DELETE_ALL'
                     print ''
-                    print 'Valid queries are:'
-                    print '  <peer_id> LIST: return remote peer list'
-                    print '  <peer_id> NAME: return remote peer name'
+                    #print 'Valid queries are:'
+                    #print '  <peer_id> LIST: return remote peer list'
+                    #print '  <peer_id> NAME: return remote peer name'
                     continue
 
-                (found, wait_reply) = self.__validateCommand(arguments)
-                if not found:
-                    print "Error validating command"
+                elif arguments[0].upper() == 'INSERT':
+                    if num_args != 3:
+                        print 'Invalid number of arguments'
+                        print 'Usage: INSERT <key> <value>'
+                        continue
+
+                    self.__doInsertKey(arguments[1], arguments[2])
                     continue
-                            
-                #send to: (peerId, msg, data)
-                data = ""
-                num_args = len(arguments)
-                if num_args > 2: data = arguments[2]
-                rc = self.sendToPeer(arguments[0], 
-                                     arguments[1], 
-                                     data, 
-                                     wait_reply)
-                if not rc:
-                    print "Could not process command"
+                
+                elif arguments[0].upper() == 'DELETE':
+                    if num_args != 2:
+                        print 'Invalid number of arguments'
+                        print 'Usage: DELETE <key>'
+                        continue    
+
+                    self.__doDeleteKey(arguments[1])
+                    continue
+
+                elif arguments[0].upper() == 'GET':
+                    if num_args != 2:
+                        print 'Invalid number of arguments'
+                        print 'Usage: GET <key>'
+                        continue                  
+                        
+                    self.__doGetValue(arguments[1])
+                    continue
+
+                elif arguments[0].upper() == 'GET_ALL':
+                    if num_args != 1:
+                        print 'Invalid number of arguments'
+                        print 'Usage: GET_ALL'
+                        continue                  
+                        
+                    self.__doGetAllValue()
+                    continue
+
+                elif arguments[0].upper() == 'DELETE_ALL':
+                    if num_args != 1:
+                        print 'Invalid number of arguments'
+                        print 'Usage: DELETE_ALL'
+                        continue                  
+                        
+                    self.__doDelAllValue()
+                    continue
+
                 else:
-                    print rc
+                    print "Invalid command"
+                    continue
+                    
 
             except KeyboardInterrupt:
                 print "\nKeyboard interruption. Stopping..."
